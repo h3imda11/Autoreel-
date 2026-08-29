@@ -14,13 +14,24 @@ export type YouTubeCategory =
 export type YouTubeVisibility = 'public' | 'unlisted' | 'private' | 'scheduled';
 
 export type VisualStyle = 
-  | 'cinematic-hyperrealistic'
+  | 'realistic-cinematic'
+  | 'anime'
+  | 'cartoon'
+  | 'comic-book'
+  | '3d-animation'
+  | '2d-animation'
+  | 'dark-fantasy'
+  | 'cyberpunk'
   | 'dark-cyberpunk'
-  | 'anime-manga'
-  | '3d-pixar'
-  | 'vintage-film'
+  | 'watercolor'
+  | 'clay-stop-motion'
+  | 'pixel-art'
+  | 'documentary'
   | 'documentary-noir'
-  | 'minimalist-motion';
+  | 'cinematic-hyperrealistic'
+  | 'minimalist-motion'
+  | 'vintage-film'
+  | 'custom';
 
 export type CaptionStyle =
   | 'hormozi-bold-glow'
@@ -39,24 +50,33 @@ export type MusicMood =
   | 'suspense-thriller';
 
 export type VoiceEmotion =
+  | 'suspense'
+  | 'fear'
+  | 'excitement'
+  | 'sadness'
+  | 'anger'
+  | 'surprise'
+  | 'comedy'
   | 'dramatic'
   | 'motivational'
+  | 'authoritative'
+  | 'storyteller'
   | 'energetic'
   | 'mysterious'
-  | 'chill'
-  | 'authoritative'
-  | 'storyteller';
+  | 'chill';
 
 export interface VoicePreset {
   id: string;
   name: string;
   gender: 'male' | 'female';
   accent: string;
-  previewUrl?: string;
+  language: string;
   tone: VoiceEmotion;
-  geminiVoiceName: 'Puck' | 'Charon' | 'Kore' | 'Fenrir' | 'Zephyr';
+  geminiVoiceName: 'Puck' | 'Charon' | 'Kore' | 'Fenrir' | 'Zephyr' | 'Aoede' | 'Leda' | 'Orus';
   description: string;
   style?: string;
+  recommendedNiches: string[];
+  isMaleNaturalPriority?: boolean;
 }
 
 export interface SoundEffect {
@@ -98,30 +118,63 @@ export interface VideoScene {
   transition: 'fade' | 'zoom-in' | 'slide-left' | 'glitch' | 'dissolve' | 'wipe';
   soundEffect?: string; // id from sound effects
   soundEffectTiming?: number; // offset in seconds
+  sceneEmotion?: VoiceEmotion;
+  continuityNotes?: string;
 }
 
-export type VideoStatus = 'draft' | 'generating' | 'rendered' | 'scheduled' | 'published' | 'failed';
+export type VideoStatus = 'draft' | 'generating' | 'rendering' | 'ready' | 'scheduled' | 'uploading' | 'published' | 'failed';
+
+export interface StoryAnalysis {
+  storyStructure: string;
+  characters: string[];
+  setting: string;
+  mood: string;
+  pacing: string;
+  importantEvents: string[];
+  emotionalArc: string;
+  ending: string;
+  continuityNotes: string;
+}
+
+export interface VoiceSettings {
+  gender: 'male' | 'female';
+  language: string;
+  accent: string;
+  speed: number; // 0.75 to 1.5
+  pitch: number; // -5 to +5
+  emotion: VoiceEmotion;
+  style: string;
+}
 
 export interface VideoProject {
   id: string;
   title: string;
   description: string;
   hashtags: string[];
+  tags?: string[];
   niche: string;
   topic: string;
+  styleReference?: string;
+  customStylePrompt?: string;
+  storyAnalysis?: StoryAnalysis;
   duration: DurationOption;
   language: string;
   voiceId: string;
   voiceEmotion: VoiceEmotion;
+  voiceSettings?: VoiceSettings;
   visualStyle: VisualStyle;
   captionStyle: CaptionStyle;
   musicTrackId: string;
   musicVolume: number; // 0 to 1
   voiceVolume: number; // 0 to 1
+  sfxVolume?: number;  // 0 to 1
   targetPlatforms: PlatformType[];
   scenes: VideoScene[];
   thumbnailUrl?: string;
   renderedVideoUrl?: string;
+  renderJobId?: string;
+  renderProgress?: number;
+  renderStage?: string;
   status: VideoStatus;
   createdAt: string;
   updatedAt: string;
@@ -144,6 +197,7 @@ export interface VideoProject {
   retentionRate?: number;
   viralScore?: number;
   estimatedRevenue?: number;
+  errorMessage?: string;
 }
 
 export interface ContentPlanItem {
@@ -211,6 +265,8 @@ export interface SocialAccount {
   autoPublishEnabled?: boolean;
   isDefault?: boolean;
   monetized?: boolean;
+  defaultVisibility?: YouTubeVisibility;
+  quotaUsedPercent?: number;
 }
 
 export interface VideoTemplate {
@@ -230,6 +286,7 @@ export interface VideoTemplate {
   sampleHook?: string;
   hookSample?: string;
   samplePrompt?: string;
+  sampleStyleReference?: string;
   estimatedViews: string;
 }
 
@@ -250,26 +307,62 @@ export interface AnalyticsOverview {
   aiInsights: string[];
 }
 
+export interface FreeAccessLimits {
+  maxVideosPerMonth: number;
+  maxCharsPerPrompt: number;
+  allowCustomVoice: boolean;
+  allowAutoYouTube: boolean;
+  hdExport: boolean;
+}
+
+export interface FreeAccessEmailEntry {
+  id: string;
+  email: string;
+  addedBy: string;
+  addedAt: string;
+  note?: string;
+  status: 'active' | 'revoked';
+}
+
 export interface UserProfile {
   id: string;
   name: string;
   email: string;
   avatar: string;
-  plan: 'starter' | 'creator-pro' | 'viral-agency';
+  role: 'admin' | 'user';
+  plan: 'starter' | 'creator-pro' | 'viral-agency' | 'free-vip';
   creditsRemaining: number;
   creditsTotal: number;
   videosCreatedThisMonth: number;
   videosLimit: number;
+  isFreeAccessUser: boolean;
+  isEmailVerified: boolean;
+  freeTierLimits?: FreeAccessLimits;
   defaultChannelId?: string;
+  createdAt?: string;
 }
 
 export type GenerationProgressState = 
   | 'idle'
-  | 'researching'
+  | 'analyzing'
   | 'writing'
+  | 'storyboard'
   | 'voice'
   | 'visuals'
-  | 'editing'
+  | 'compositing'
   | 'rendering'
+  | 'finalizing'
   | 'ready'
   | 'failed';
+
+export interface RenderJob {
+  id: string;
+  projectId: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  stage: string;
+  progress: number;
+  outputUrl?: string;
+  error?: string;
+  createdAt: string;
+  completedAt?: string;
+}

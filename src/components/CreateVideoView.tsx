@@ -16,7 +16,16 @@ import {
   ShieldCheck,
   Check,
   Play,
-  Share2
+  Share2,
+  Sliders,
+  SlidersHorizontal,
+  FileText,
+  BookOpen,
+  Eye,
+  Smile,
+  AlertTriangle,
+  Heart,
+  HelpCircle
 } from 'lucide-react';
 import {
   DurationOption,
@@ -24,36 +33,51 @@ import {
   CaptionStyle,
   MusicMood,
   VoiceEmotion,
-  PlatformType,
   VideoProject,
-  GenerationProgressState
+  GenerationProgressState,
+  VoiceSettings
 } from '../types';
-import { NICHES, LANGUAGES, VOICE_PRESETS, MUSIC_TRACKS } from '../data/mockTemplates';
+import { NICHES, LANGUAGES, MUSIC_TRACKS } from '../data/mockTemplates';
+import { VIDEO_STYLES, NATURAL_VOICES, VOICE_EMOTIONS, VOICE_STYLES } from '../data/voices';
 import { audioEngine } from '../utils/audioEngine';
 
 interface CreateVideoViewProps {
   initialNiche?: string;
   initialPrompt?: string;
   onVideoCreated: (video: VideoProject) => void;
+  isFreeAccessUser?: boolean;
 }
 
 export const CreateVideoView: React.FC<CreateVideoViewProps> = ({
   initialNiche = 'Stoic Wisdom & Quotes',
   initialPrompt = '',
   onVideoCreated,
+  isFreeAccessUser = false,
 }) => {
-  // Form State
+  // Topic & Style References
   const [niche, setNiche] = useState(initialNiche);
   const [topicPrompt, setTopicPrompt] = useState(initialPrompt);
+  const [styleReference, setStyleReference] = useState('');
+  const [customStylePrompt, setCustomStylePrompt] = useState('');
+
+  // Duration & Language
   const [duration, setDuration] = useState<DurationOption>(30);
   const [language, setLanguage] = useState('en');
-  const [selectedVoiceId, setSelectedVoiceId] = useState('voice-marcus');
-  const [voiceEmotion, setVoiceEmotion] = useState<VoiceEmotion>('dramatic');
-  const [visualStyle, setVisualStyle] = useState<VisualStyle>('cinematic-hyperrealistic');
+
+  // Visual & Caption Styles
+  const [visualStyle, setVisualStyle] = useState<VisualStyle>('realistic-cinematic');
   const [captionStyle, setCaptionStyle] = useState<CaptionStyle>('hormozi-bold-glow');
   const [musicMood, setMusicMood] = useState<MusicMood>('dark-phonk');
   const [youtubeCategory, setYoutubeCategory] = useState<string>('Education');
   const [includeShortsTag, setIncludeShortsTag] = useState(true);
+
+  // Expressive Voice Studio Settings
+  const [selectedVoiceId, setSelectedVoiceId] = useState('voice-marcus');
+  const [voiceGender, setVoiceGender] = useState<'male' | 'female'>('male');
+  const [voiceEmotion, setVoiceEmotion] = useState<VoiceEmotion>('dramatic');
+  const [voiceSpeed, setVoiceSpeed] = useState<number>(1.0);
+  const [voicePitch, setVoicePitch] = useState<number>(0);
+  const [voiceSelectedStyle, setVoiceSelectedStyle] = useState<string>('Cinematic Blockbuster Narrator');
 
   // Generation Pipeline State
   const [progressState, setProgressState] = useState<GenerationProgressState>('idle');
@@ -61,45 +85,6 @@ export const CreateVideoView: React.FC<CreateVideoViewProps> = ({
   const [currentStageText, setCurrentStageText] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [auditioningVoice, setAuditioningVoice] = useState<string | null>(null);
-
-  const visualStyles: { id: VisualStyle; name: string; desc: string; img: string }[] = [
-    {
-      id: 'cinematic-hyperrealistic',
-      name: 'Cinematic Realistic',
-      desc: '8K photorealistic lighting, dramatic depth of field',
-      img: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=300&auto=format&fit=crop&q=80',
-    },
-    {
-      id: 'dark-cyberpunk',
-      name: 'Dark Cyberpunk',
-      desc: 'Neon hues, futuristic holograms, moody shadows',
-      img: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=300&auto=format&fit=crop&q=80',
-    },
-    {
-      id: 'documentary-noir',
-      name: 'Documentary Noir',
-      desc: 'Classic monochrome statues, golden amber accents',
-      img: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=300&auto=format&fit=crop&q=80',
-    },
-    {
-      id: '3d-pixar',
-      name: '3D Render / Pixar',
-      desc: 'Vibrant stylized 3D characters and lively environments',
-      img: 'https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=300&auto=format&fit=crop&q=80',
-    },
-    {
-      id: 'vintage-film',
-      name: 'Vintage Film Grain',
-      desc: '1970s analogue grain, retro textures, VHS distortion',
-      img: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=300&auto=format&fit=crop&q=80',
-    },
-    {
-      id: 'minimalist-motion',
-      name: 'Minimalist Motion',
-      desc: 'Clean geometric typography, UI diagrams, sleek vectors',
-      img: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=300&auto=format&fit=crop&q=80',
-    },
-  ];
 
   const captionStyles: { id: CaptionStyle; name: string; sample: string; previewClass: string }[] = [
     {
@@ -128,46 +113,45 @@ export const CreateVideoView: React.FC<CreateVideoViewProps> = ({
     },
   ];
 
-  const emotions: { id: VoiceEmotion; label: string }[] = [
-    { id: 'dramatic', label: 'Dramatic & Deep' },
-    { id: 'motivational', label: 'High Motivation' },
-    { id: 'energetic', label: 'Energetic & Viral' },
-    { id: 'mysterious', label: 'Mysterious / Eerie' },
-    { id: 'chill', label: 'Chill & Relaxed' },
-    { id: 'authoritative', label: 'Authoritative' },
-    { id: 'storyteller', label: 'Wise Storyteller' },
-  ];
-
-  const handleAuditionVoice = (voice: typeof VOICE_PRESETS[0]) => {
+  const handleAuditionVoice = (voice: typeof NATURAL_VOICES[0]) => {
     setAuditioningVoice(voice.id);
-    const sampleText = `Hello creator! This is ${voice.name}, ready to narrate your next viral short video.`;
-    audioEngine.speakNarration(sampleText, voice.tone, 1.0, undefined, () => {
+    const sampleText = `Hello creator! This is ${voice.name}. Mastering viral tension and emotional pacing starts with the right voice delivery.`;
+    audioEngine.speakNarration(sampleText, voice.tone, voiceSpeed, undefined, () => {
       setAuditioningVoice(null);
     });
   };
 
   const handleStartGeneration = async () => {
-    if (!topicPrompt.trim()) {
-      setTopicPrompt(`The most powerful psychological truth about ${niche}`);
-    }
-
     setProgressState('researching');
     setProgressPercent(10);
-    setCurrentStageText('Researching viral hooks & retention angles...');
+    setCurrentStageText('Analyzing Story & Narrative Arc with AI Story Engine...');
     setErrorMessage('');
 
     try {
-      // Step 1: Research & Script via Gemini backend
+      const selectedVoice = NATURAL_VOICES.find(v => v.id === selectedVoiceId) || NATURAL_VOICES[0];
+      const voiceSettings: VoiceSettings = {
+        gender: voiceGender,
+        accent: selectedVoice.accent,
+        language: selectedVoice.language,
+        speed: voiceSpeed,
+        pitch: voicePitch,
+        emotion: voiceEmotion,
+        style: voiceSelectedStyle,
+      };
+
+      // Step 1: Request script generation from backend
       const scriptPromise = fetch('/api/gemini/generate-script', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          niche,
-          topic: topicPrompt.trim() || `The ultimate guide to ${niche}`,
+          niche: niche.trim() || 'Stoic Wisdom & Quotes',
+          topic: topicPrompt.trim() || `The hidden secret of ${niche || 'stoic philosophy'}`,
+          styleReference: styleReference.trim(),
           duration,
           language,
           voiceEmotion,
-          visualStyle,
+          voiceSettings,
+          visualStyle: visualStyle === 'custom' && customStylePrompt ? customStylePrompt : visualStyle,
           captionStyle,
           musicMood,
           platform: 'youtube',
@@ -176,39 +160,47 @@ export const CreateVideoView: React.FC<CreateVideoViewProps> = ({
         }),
       });
 
-      // Simulation progress updates while Gemini calculates
+      // Pipeline stages visual timeline
       const p1 = setTimeout(() => {
         setProgressState('writing');
-        setProgressPercent(28);
-        setCurrentStageText('Writing 3-second hook, body scenes & CTA...');
-      }, 900);
+        setProgressPercent(25);
+        setCurrentStageText('Writing 3-Second Thumb-Stopping Hook & Script Continuity...');
+      }, 700);
 
       const p2 = setTimeout(() => {
-        setProgressState('voice');
-        setProgressPercent(45);
-        setCurrentStageText(`Synthesizing voiceover with ${VOICE_PRESETS.find(v => v.id === selectedVoiceId)?.name || 'AI Voice'}...`);
-      }, 2000);
+        setProgressState('storyboard');
+        setProgressPercent(40);
+        setCurrentStageText('Generating Scene Storyboards & Visual Prompts...');
+      }, 1400);
 
       const p3 = setTimeout(() => {
-        setProgressState('visuals');
-        setProgressPercent(65);
-        setCurrentStageText('Selecting 9:16 vertical visual frames & color grades...');
-      }, 3200);
+        setProgressState('voice');
+        setProgressPercent(55);
+        setCurrentStageText(`Synthesizing Expressive Voiceover with ${selectedVoice.name} (${voiceEmotion})...`);
+      }, 2200);
 
       const p4 = setTimeout(() => {
-        setProgressState('editing');
+        setProgressState('visuals');
+        setProgressPercent(70);
+        setCurrentStageText('Selecting 9:16 Vertical Visual Frames & Color Continuity...');
+      }, 3000);
+
+      const p5 = setTimeout(() => {
+        setProgressState('compositing');
         setProgressPercent(82);
-        setCurrentStageText('Synchronizing karaoke captions & sound effect cues...');
-      }, 4400);
+        setCurrentStageText('Compositing Timeline, Karaoke Captions & SFX Cues...');
+      }, 3800);
 
       const response = await scriptPromise;
       clearTimeout(p1);
       clearTimeout(p2);
       clearTimeout(p3);
       clearTimeout(p4);
+      clearTimeout(p5);
 
       if (!response.ok) {
-        throw new Error('Failed to generate script from AI engine');
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to generate story from AI engine');
       }
 
       const resData = await response.json();
@@ -219,8 +211,8 @@ export const CreateVideoView: React.FC<CreateVideoViewProps> = ({
       const generated = resData.data;
 
       setProgressState('rendering');
-      setProgressPercent(95);
-      setCurrentStageText('Compiling 9:16 video timeline into editor...');
+      setProgressPercent(92);
+      setCurrentStageText('Rendering 1080x1920 Master Short Video Preview...');
 
       await new Promise((r) => setTimeout(r, 600));
 
@@ -231,19 +223,24 @@ export const CreateVideoView: React.FC<CreateVideoViewProps> = ({
         title: generated.title.includes('#Shorts') ? generated.title : `${generated.title} #Shorts`,
         description: generated.description,
         hashtags: generated.hashtags,
-        niche,
-        topic: topicPrompt,
+        tags: generated.tags,
+        niche: niche || 'Stoic Wisdom & Quotes',
+        topic: topicPrompt || `Mastering ${niche}`,
+        styleReference: styleReference || '',
         duration,
         language,
         voiceId: selectedVoiceId,
         voiceEmotion,
+        voiceSettings,
         visualStyle,
         captionStyle,
         musicTrackId: selectedTrack.id,
-        musicVolume: 0.3,
+        musicVolume: 0.28,
         voiceVolume: 0.95,
+        sfxVolume: 0.85,
         targetPlatforms: ['youtube'],
         scenes: generated.scenes,
+        storyAnalysis: generated.storyAnalysis,
         thumbnailUrl: generated.scenes[0]?.visualUrl || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80',
         status: 'draft',
         createdAt: new Date().toISOString(),
@@ -255,12 +252,19 @@ export const CreateVideoView: React.FC<CreateVideoViewProps> = ({
         madeForKids: false,
       };
 
-      // Save to backend database
+      // Save to database
       await fetch('/api/videos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newProject),
       });
+
+      // Kick off background render pipeline job
+      fetch('/api/render/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project: newProject }),
+      }).catch(console.error);
 
       setProgressState('ready');
       setProgressPercent(100);
@@ -268,7 +272,7 @@ export const CreateVideoView: React.FC<CreateVideoViewProps> = ({
 
       setTimeout(() => {
         onVideoCreated(newProject);
-      }, 800);
+      }, 700);
 
     } catch (err: any) {
       console.error(err);
@@ -277,20 +281,22 @@ export const CreateVideoView: React.FC<CreateVideoViewProps> = ({
     }
   };
 
+  const filteredVoices = NATURAL_VOICES.filter(v => v.gender === voiceGender);
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-8 animate-in fade-in duration-300">
-      {/* Title & Description */}
+      {/* Title & Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-6">
         <div>
           <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold mb-2">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>AI Faceless Generator</span>
+            <span>AI Story Engine & Faceless Creator</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
             Create New Viral Short Video
           </h1>
           <p className="text-slate-400 text-sm mt-1">
-            Configure your creative blueprint. AutoReel handles scripting, voiceover, visuals, captions, and music.
+            Deep narrative analysis, expressive voiceover, and 9:16 visual continuity tailored exclusively for YouTube Shorts.
           </p>
         </div>
 
@@ -298,12 +304,28 @@ export const CreateVideoView: React.FC<CreateVideoViewProps> = ({
           id="btn-generate-main-top"
           disabled={progressState !== 'idle' && progressState !== 'failed'}
           onClick={handleStartGeneration}
-          className="flex items-center justify-center space-x-2 px-6 py-3 rounded-xl bg-gradient-to-r from-rose-500 via-purple-600 to-cyan-500 hover:from-rose-600 hover:to-purple-700 text-white font-bold text-sm shadow-xl shadow-rose-500/25 transition-all disabled:opacity-50 active:scale-95 shrink-0"
+          className="flex items-center justify-center space-x-2 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-rose-500 via-purple-600 to-cyan-500 hover:from-rose-600 hover:to-purple-700 text-white font-bold text-sm shadow-xl shadow-rose-500/25 transition-all disabled:opacity-50 active:scale-95 shrink-0"
         >
           <Sparkles className="w-4 h-4" />
           <span>Generate Full Video</span>
         </button>
       </div>
+
+      {/* Free VIP Access Active Notice */}
+      {isFreeAccessUser && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-purple-950/30 to-slate-900 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-between shadow-lg">
+          <div className="flex items-center space-x-2.5">
+            <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+            <div>
+              <span className="font-bold text-white">100% Free VIP Access Active:</span>{' '}
+              <span>Your email is authorized for unlimited video creations, custom voices, and direct YouTube Shorts publishing.</span>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold uppercase tracking-wider shrink-0">
+            Unlimited Tier
+          </span>
+        </div>
+      )}
 
       {/* Progress State Overlay if Generating */}
       {progressState !== 'idle' && progressState !== 'failed' && (
@@ -315,14 +337,14 @@ export const CreateVideoView: React.FC<CreateVideoViewProps> = ({
               </div>
               <div>
                 <h3 className="text-base font-bold text-white">
-                  Creating 9:16 Video Blueprint
+                  Creating Master 9:16 Video Blueprint
                 </h3>
                 <p className="text-xs text-rose-400 font-medium mt-0.5">
                   {currentStageText}
                 </p>
               </div>
             </div>
-            <div className="text-xl font-black font-mono text-white">
+            <div className="text-2xl font-black font-mono text-white">
               {progressPercent}%
             </div>
           </div>
@@ -335,13 +357,17 @@ export const CreateVideoView: React.FC<CreateVideoViewProps> = ({
             />
           </div>
 
-          {/* Progress Stages Pills */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 text-xs">
+          {/* 8 Pipeline Stages Tracker */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 text-[11px]">
             {[
-              { label: '1. Viral Hook & Script', active: progressPercent >= 20 },
-              { label: '2. AI Voiceover Synthesis', active: progressPercent >= 45 },
-              { label: '3. Visual Frames & SFX', active: progressPercent >= 70 },
-              { label: '4. Captions & 9:16 Timeline', active: progressPercent >= 90 },
+              { label: '1. Story Analysis', active: progressPercent >= 15 },
+              { label: '2. Viral Script & Hook', active: progressPercent >= 30 },
+              { label: '3. Storyboard & Continuity', active: progressPercent >= 45 },
+              { label: '4. Voice Synthesis', active: progressPercent >= 60 },
+              { label: '5. 9:16 Visual Framing', active: progressPercent >= 75 },
+              { label: '6. Timeline Compositing', active: progressPercent >= 85 },
+              { label: '7. Subtitle Karaoke & SFX', active: progressPercent >= 95 },
+              { label: '8. Finalizing Master', active: progressPercent >= 100 },
             ].map((stg, i) => (
               <div
                 key={i}
@@ -351,7 +377,7 @@ export const CreateVideoView: React.FC<CreateVideoViewProps> = ({
                     : 'bg-slate-950/40 border-slate-800 text-slate-500'
                 }`}
               >
-                <div className={`w-2 h-2 rounded-full ${stg.active ? 'bg-rose-400' : 'bg-slate-700'}`} />
+                <div className={`w-2 h-2 rounded-full ${stg.active ? 'bg-rose-400 animate-pulse' : 'bg-slate-700'}`} />
                 <span className="truncate">{stg.label}</span>
               </div>
             ))}
@@ -372,24 +398,25 @@ export const CreateVideoView: React.FC<CreateVideoViewProps> = ({
         </div>
       )}
 
-      {/* Main Form Settings Grid */}
+      {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 Cols: Prompt, Duration, Visuals, Voice */}
+        {/* Left 2 Cols: Prompt, Style Reference, Visual Styles, Expressive Voice Studio */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Section 1: Topic & Niche */}
-          <div className="p-5 sm:p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+          {/* Section 1: Topic / Niche & Style Reference (Optional, up to 5,000 & 2,000 chars) */}
+          <div className="p-5 sm:p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-5">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-white flex items-center space-x-2">
                 <Flame className="w-4 h-4 text-rose-500" />
-                <span>Niche & Video Topic</span>
+                <span>Niche, Topic & Writing Style Reference</span>
               </h3>
               <span className="text-xs text-slate-500">Step 1 of 4</span>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
+              {/* Niche Category Selector */}
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                  Select Niche Category
+                  Select Niche Category (Optional)
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {NICHES.map((n) => (
@@ -412,214 +439,183 @@ export const CreateVideoView: React.FC<CreateVideoViewProps> = ({
                 </div>
               </div>
 
+              {/* Large Niche / Topic Box (Up to 5,000 chars) */}
               <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                  Specific Topic / Custom Prompt
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
+                    <BookOpen className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Niche / Video Topic (Optional — Up to 5,000 Characters)</span>
+                  </label>
+                  <span className="text-[11px] font-mono text-slate-500">
+                    {topicPrompt.length} / 5,000
+                  </span>
+                </div>
                 <textarea
                   id="textarea-create-topic"
-                  rows={3}
+                  rows={4}
+                  maxLength={5000}
                   value={topicPrompt}
                   onChange={(e) => setTopicPrompt(e.target.value)}
-                  placeholder="E.g., 3 mental tricks of Marcus Aurelius that stop anxiety and negative thoughts instantly..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs sm:text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-rose-500"
+                  placeholder="Enter custom story details, facts, characters, or specific ideas... E.g., The untold truth about how Roman Emperor Marcus Aurelius conquered severe panic attacks using negative visualization during the Antonine Plague."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs sm:text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-rose-500"
                 />
               </div>
-            </div>
-          </div>
 
-          {/* Section 2: Duration, Language, Platforms */}
-          <div className="p-5 sm:p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-5">
-            <h3 className="text-sm font-bold text-white flex items-center space-x-2">
-              <Clock className="w-4 h-4 text-amber-400" />
-              <span>Duration, Language & Target Platforms</span>
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {/* Duration */}
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                  Target Duration
-                </label>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {[15, 30, 45, 60].map((sec) => (
-                    <button
-                      key={sec}
-                      type="button"
-                      onClick={() => setDuration(sec as DurationOption)}
-                      className={`py-2 rounded-xl text-xs font-bold transition-all border ${
-                        duration === sec
-                          ? 'bg-rose-500 text-white border-rose-400 shadow-md shadow-rose-500/20'
-                          : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {sec}s
-                    </button>
-                  ))}
+              {/* Example Script / Style Reference Box (Up to 2,000 chars) */}
+              <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
+                    <FileText className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Example Script / Style Reference (Optional — Up to 2,000 Characters)</span>
+                  </label>
+                  <span className="text-[11px] font-mono text-slate-500">
+                    {styleReference.length} / 2,000
+                  </span>
                 </div>
-              </div>
-
-              {/* Language */}
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                  Narration Language
-                </label>
-                <select
-                  id="select-create-language"
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-rose-500"
-                >
-                  {LANGUAGES.map((l) => (
-                    <option key={l.code} value={l.code}>
-                      {l.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* YouTube Category */}
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                  YouTube Category
-                </label>
-                <select
-                  id="select-youtube-category"
-                  value={youtubeCategory}
-                  onChange={(e) => setYoutubeCategory(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-rose-500 font-medium"
-                >
-                  <option value="Education">Education & Insights</option>
-                  <option value="Entertainment">Entertainment & Drama</option>
-                  <option value="Science & Technology">Science & Tech</option>
-                  <option value="People & Blogs">People & Philosophy</option>
-                  <option value="Howto & Style">Howto & Self Growth</option>
-                  <option value="Gaming">Gaming & Lore</option>
-                </select>
-              </div>
-            </div>
-
-            {/* YouTube Shorts Algorithm Feature Badges */}
-            <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
-              <div className="flex items-center space-x-2">
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-slate-300 font-medium">Auto-Optimized for YouTube Shorts Algorithm</span>
-              </div>
-              <label className="flex items-center space-x-2 text-slate-400 hover:text-slate-200 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={includeShortsTag}
-                  onChange={(e) => setIncludeShortsTag(e.target.checked)}
-                  className="rounded border-slate-700 bg-slate-950 text-red-500 focus:ring-red-500/20"
+                <p className="text-[11px] text-cyan-400/90 leading-relaxed">
+                  💡 <strong>Notice:</strong> This is <em>NOT</em> the script to copy. It is only a writing-style reference that tells the AI how the story/script should feel (e.g. suspenseful tone, short sentences, dark punchy rhythm). The AI will generate an original script inspired by this style.
+                </p>
+                <textarea
+                  id="textarea-style-reference"
+                  rows={3}
+                  maxLength={2000}
+                  value={styleReference}
+                  onChange={(e) => setStyleReference(e.target.value)}
+                  placeholder="Example: Write like a dark cinematic mystery story with short sentences, suspenseful narration, dramatic pauses, and a shocking twist ending."
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs sm:text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
                 />
-                <span className="text-[11px] font-semibold text-red-400">Append #Shorts to Title</span>
-              </label>
+              </div>
             </div>
           </div>
 
-          {/* Section 3: Visual Style Selection */}
+          {/* Section 2: 13 Visual Styles Grid */}
           <div className="p-5 sm:p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-white flex items-center space-x-2">
                 <Palette className="w-4 h-4 text-purple-400" />
-                <span>Visual Art Style (9:16 Vertical)</span>
+                <span>Visual Art Style (13 Selectable Styles)</span>
               </h3>
-              <span className="text-xs text-slate-500">Curated AI & 8K Stock</span>
+              <span className="text-xs text-slate-500">Step 2 of 4</span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {visualStyles.map((vs) => (
-                <div
-                  key={vs.id}
-                  onClick={() => setVisualStyle(vs.id)}
-                  className={`relative rounded-xl overflow-hidden border cursor-pointer group transition-all ${
-                    visualStyle === vs.id
-                      ? 'border-rose-500 ring-2 ring-rose-500/40 shadow-lg'
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-80 overflow-y-auto pr-1">
+              {VIDEO_STYLES.map((style) => (
+                <button
+                  key={style.id}
+                  type="button"
+                  onClick={() => setVisualStyle(style.id)}
+                  className={`group relative rounded-2xl overflow-hidden border text-left transition-all aspect-[9/14] flex flex-col justify-end p-2.5 ${
+                    visualStyle === style.id
+                      ? 'border-rose-500 ring-2 ring-rose-500/40 shadow-lg shadow-rose-500/20'
                       : 'border-slate-800 hover:border-slate-700 opacity-80 hover:opacity-100'
                   }`}
                 >
-                  <div className="aspect-[4/3] bg-slate-950 overflow-hidden">
-                    <img
-                      src={vs.img}
-                      alt={vs.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
-                  </div>
+                  <img
+                    src={style.previewUrl}
+                    alt={style.name}
+                    className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
+                  
+                  {visualStyle === style.id && (
+                    <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center shadow">
+                      <Check className="w-3 h-3" />
+                    </div>
+                  )}
 
-                  <div className="absolute bottom-2 left-2 right-2">
-                    <div className="text-xs font-bold text-white flex items-center justify-between">
-                      <span className="truncate">{vs.name}</span>
-                      {visualStyle === vs.id && (
-                        <Check className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-                      )}
-                    </div>
-                    <div className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
-                      {vs.desc}
+                  <div className="relative z-10">
+                    <span className="inline-block px-1.5 py-0.5 rounded bg-rose-500/30 text-rose-300 text-[9px] font-bold uppercase mb-1">
+                      {style.badge}
+                    </span>
+                    <div className="font-bold text-white text-xs leading-tight">
+                      {style.name}
                     </div>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
+
+            {visualStyle === 'custom' && (
+              <div className="pt-2 animate-in fade-in">
+                <label className="text-xs font-semibold text-slate-300 block mb-1">
+                  Custom Art Style Prompt Modifier
+                </label>
+                <input
+                  type="text"
+                  value={customStylePrompt}
+                  onChange={(e) => setCustomStylePrompt(e.target.value)}
+                  placeholder="E.g., Renaissance oil painting with chiaroscuro Caravaggio lighting, 9:16 vertical composition"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-rose-500"
+                />
+              </div>
+            )}
           </div>
-        </div>
 
-        {/* Right Col: Voice Studio & Caption Style */}
-        <div className="space-y-6">
-          {/* AI Voice Selection */}
-          <div className="p-5 sm:p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
-            <h3 className="text-sm font-bold text-white flex items-center space-x-2">
-              <Volume2 className="w-4 h-4 text-cyan-400" />
-              <span>AI Voice & Tone</span>
-            </h3>
+          {/* Section 3: Expressive AI Voice Studio */}
+          <div className="p-5 sm:p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white flex items-center space-x-2">
+                <Volume2 className="w-4 h-4 text-cyan-400" />
+                <span>Expressive AI Voice Studio</span>
+              </h3>
+              <span className="text-xs text-slate-500">Step 3 of 4</span>
+            </div>
 
-            {/* Voice Emotion Tag */}
-            <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                Tone / Emotion
-              </label>
-              <select
-                id="select-voice-emotion"
-                value={voiceEmotion}
-                onChange={(e) => setVoiceEmotion(e.target.value as VoiceEmotion)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-rose-500"
+            {/* Gender Toggle & Prioritized Natural Male Voices */}
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setVoiceGender('male');
+                  setSelectedVoiceId('voice-marcus');
+                }}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all border ${
+                  voiceGender === 'male'
+                    ? 'bg-gradient-to-r from-rose-500 to-purple-600 text-white border-rose-400 shadow-md'
+                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
+                }`}
               >
-                {emotions.map((em) => (
-                  <option key={em.id} value={em.id}>
-                    {em.label}
-                  </option>
-                ))}
-              </select>
+                Natural Male Voices (High Priority)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setVoiceGender('female');
+                  setSelectedVoiceId('voice-sophia');
+                }}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all border ${
+                  voiceGender === 'female'
+                    ? 'bg-gradient-to-r from-rose-500 to-purple-600 text-white border-rose-400 shadow-md'
+                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                Expressive Female Voices
+              </button>
             </div>
 
             {/* Voice Cards */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-300 block">
-                Select Voice Profile
-              </label>
-              {VOICE_PRESETS.map((v) => {
-                const isSelected = selectedVoiceId === v.id;
-                const isAuditioning = auditioningVoice === v.id;
-                return (
-                  <div
-                    key={v.id}
-                    onClick={() => setSelectedVoiceId(v.id)}
-                    className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                      isSelected
-                        ? 'bg-rose-500/10 border-rose-500 text-white'
-                        : 'bg-slate-950/60 border-slate-800/80 text-slate-300 hover:bg-slate-800/50'
-                    }`}
-                  >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {filteredVoices.map((v) => (
+                <div
+                  key={v.id}
+                  onClick={() => setSelectedVoiceId(v.id)}
+                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                    selectedVoiceId === v.id
+                      ? 'bg-rose-500/10 border-rose-500 shadow-md shadow-rose-500/10'
+                      : 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
                     <div>
-                      <div className="text-xs font-bold flex items-center space-x-1.5">
-                        <span>{v.name}</span>
-                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">
-                          {v.gender}
-                        </span>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-white text-xs sm:text-sm">{v.name}</span>
+                        {v.isMaleNaturalPriority && (
+                          <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[9px] font-bold uppercase">
+                            Deep Priority
+                          </span>
+                        )}
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">
-                        {v.accent}
-                      </div>
+                      <div className="text-[11px] text-slate-400 mt-0.5">{v.accent}</div>
                     </div>
 
                     <button
@@ -628,92 +624,249 @@ export const CreateVideoView: React.FC<CreateVideoViewProps> = ({
                         e.stopPropagation();
                         handleAuditionVoice(v);
                       }}
-                      className={`p-2 rounded-lg text-xs font-semibold flex items-center space-x-1 transition-all ${
-                        isAuditioning
+                      className={`p-2 rounded-xl transition-all ${
+                        auditioningVoice === v.id
                           ? 'bg-rose-500 text-white animate-pulse'
-                          : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
                       }`}
-                      title="Audition Voice Sample"
+                      title="Audition Voice"
                     >
-                      <Play className="w-3 h-3 fill-current" />
-                      <span className="text-[10px]">Test</span>
+                      <Play className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Caption Style */}
-          <div className="p-5 sm:p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
-            <h3 className="text-sm font-bold text-white flex items-center space-x-2">
-              <Type className="w-4 h-4 text-amber-400" />
-              <span>Caption Typography</span>
-            </h3>
-
-            <div className="space-y-2.5">
-              {captionStyles.map((cs) => (
-                <div
-                  key={cs.id}
-                  onClick={() => setCaptionStyle(cs.id)}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                    captionStyle === cs.id
-                      ? 'bg-amber-500/10 border-amber-500/80 ring-1 ring-amber-500/30'
-                      : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-slate-200">{cs.name}</span>
-                    {captionStyle === cs.id && (
-                      <Check className="w-3.5 h-3.5 text-amber-400" />
-                    )}
-                  </div>
-                  <div className={`p-2 rounded-lg text-center text-xs ${cs.previewClass}`}>
-                    {cs.sample}
-                  </div>
+                  <p className="text-[11px] text-slate-400 mt-2 leading-relaxed line-clamp-2">
+                    {v.description}
+                  </p>
                 </div>
               ))}
             </div>
+
+            {/* Emotions Grid */}
+            <div>
+              <label className="text-xs font-semibold text-slate-300 block mb-2">
+                Master Emotion & Pacing
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {VOICE_EMOTIONS.slice(0, 6).map((emo) => (
+                  <button
+                    key={emo.id}
+                    type="button"
+                    onClick={() => setVoiceEmotion(emo.id)}
+                    className={`p-2.5 rounded-xl border text-left text-xs transition-all ${
+                      voiceEmotion === emo.id
+                        ? 'bg-purple-500/20 border-purple-500 text-white font-bold shadow-sm'
+                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <div className="font-semibold text-white">{emo.label}</div>
+                    <div className="text-[10px] text-slate-400 mt-0.5 truncate">{emo.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Voice Sliders (Speed, Pitch, Style) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-800/80">
+              <div>
+                <div className="flex justify-between text-xs text-slate-300 mb-1">
+                  <span>Speed:</span>
+                  <span className="font-mono text-rose-400">{voiceSpeed}x</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.75"
+                  max="1.35"
+                  step="0.05"
+                  value={voiceSpeed}
+                  onChange={(e) => setVoiceSpeed(parseFloat(e.target.value))}
+                  className="w-full accent-rose-500"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between text-xs text-slate-300 mb-1">
+                  <span>Pitch:</span>
+                  <span className="font-mono text-purple-400">{voicePitch > 0 ? `+${voicePitch}` : voicePitch}</span>
+                </div>
+                <input
+                  type="range"
+                  min="-5"
+                  max="5"
+                  step="1"
+                  value={voicePitch}
+                  onChange={(e) => setVoicePitch(parseInt(e.target.value))}
+                  className="w-full accent-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-300 block mb-1">Delivery Style</label>
+                <select
+                  value={voiceSelectedStyle}
+                  onChange={(e) => setVoiceSelectedStyle(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-rose-500 font-medium"
+                >
+                  {VOICE_STYLES.map((st) => (
+                    <option key={st} value={st}>
+                      {st}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right 1 Col: Duration, Captions, Music, YouTube Defaults */}
+        <div className="space-y-6">
+          {/* Duration & Language Box */}
+          <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+            <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+              <Clock className="w-4 h-4 text-amber-400" />
+              <span>Target Duration & Language</span>
+            </h3>
+
+            <div>
+              <label className="text-xs text-slate-400 block mb-1.5">Shorts Duration</label>
+              <div className="grid grid-cols-4 gap-1.5">
+                {[15, 30, 45, 60].map((sec) => (
+                  <button
+                    key={sec}
+                    type="button"
+                    onClick={() => setDuration(sec as DurationOption)}
+                    className={`py-2 rounded-xl text-xs font-bold transition-all border ${
+                      duration === sec
+                        ? 'bg-rose-500 text-white border-rose-400 shadow-md shadow-rose-500/20'
+                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {sec}s
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-400 block mb-1.5">Narration Language</label>
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-rose-500 font-medium"
+              >
+                {LANGUAGES.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          {/* Music Mood Selector */}
-          <div className="p-5 sm:p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
-            <h3 className="text-sm font-bold text-white flex items-center space-x-2">
-              <Music className="w-4 h-4 text-emerald-400" />
+          {/* Captions Style */}
+          <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+            <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+              <Type className="w-4 h-4 text-rose-400" />
+              <span>9:16 Caption Animation</span>
+            </h3>
+
+            <div className="space-y-2">
+              {captionStyles.map((cap) => (
+                <button
+                  key={cap.id}
+                  type="button"
+                  onClick={() => setCaptionStyle(cap.id)}
+                  className={`w-full p-3 rounded-xl border text-left transition-all ${
+                    captionStyle === cap.id
+                      ? 'bg-rose-500/10 border-rose-500 shadow-sm'
+                      : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white">{cap.name}</span>
+                    {captionStyle === cap.id && <Check className="w-3.5 h-3.5 text-rose-400" />}
+                  </div>
+                  <div className={`mt-2 p-2 rounded-lg text-center text-xs ${cap.previewClass}`}>
+                    {cap.sample}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Music Track Mood */}
+          <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+            <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+              <Music className="w-4 h-4 text-cyan-400" />
               <span>Royalty-Free Music Mood</span>
             </h3>
 
-            <select
-              id="select-music-mood"
-              value={musicMood}
-              onChange={(e) => {
-                const mood = e.target.value as MusicMood;
-                setMusicMood(mood);
-                audioEngine.playMusicTrack(mood, 0.25);
-                setTimeout(() => audioEngine.stopMusic(), 3000);
-              }}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-rose-500 font-medium"
-            >
-              {MUSIC_TRACKS.map((m) => (
-                <option key={m.id} value={m.mood}>
-                  {m.title} ({m.mood.toUpperCase()})
-                </option>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: 'dark-phonk', label: 'Dark Phonk / Drift' },
+                { id: 'epic-cinematic', label: 'Epic Cinematic' },
+                { id: 'lofi-chill', label: 'Lo-Fi Chill' },
+                { id: 'ambient-mystic', label: 'Ambient Mystic' },
+                { id: 'cyberpunk-synth', label: 'Cyberpunk Synth' },
+                { id: 'inspiring-piano', label: 'Inspiring Piano' },
+              ].map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setMusicMood(m.id as MusicMood)}
+                  className={`p-2.5 rounded-xl border text-left text-xs font-medium transition-all ${
+                    musicMood === m.id
+                      ? 'bg-cyan-500/20 border-cyan-500 text-white font-bold'
+                      : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {m.label}
+                </button>
               ))}
-            </select>
-            <p className="text-[10px] text-slate-500">
-              Plays 3-second audio preview when selected. 100% royalty-free for monetization.
-            </p>
+            </div>
           </div>
 
-          {/* Bottom Generate Button */}
+          {/* YouTube Category & Defaults */}
+          <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+            <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+              <Share2 className="w-4 h-4 text-red-500" />
+              <span>YouTube Shorts Defaults</span>
+            </h3>
+
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">Upload Category</label>
+              <select
+                value={youtubeCategory}
+                onChange={(e) => setYoutubeCategory(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-rose-500"
+              >
+                <option value="Education">Education & Insights</option>
+                <option value="Entertainment">Entertainment & Drama</option>
+                <option value="Science & Technology">Science & Technology</option>
+                <option value="People & Blogs">People & Philosophy</option>
+                <option value="Howto & Style">Howto & Self Growth</option>
+              </select>
+            </div>
+
+            <label className="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer pt-1">
+              <input
+                type="checkbox"
+                checked={includeShortsTag}
+                onChange={(e) => setIncludeShortsTag(e.target.checked)}
+                className="rounded bg-slate-950 border-slate-700 text-rose-500 focus:ring-rose-500"
+              />
+              <span>Auto-append #Shorts to title & tags</span>
+            </label>
+          </div>
+
+          {/* Bottom CTA Button */}
           <button
             id="btn-generate-main-bottom"
             disabled={progressState !== 'idle' && progressState !== 'failed'}
             onClick={handleStartGeneration}
-            className="w-full py-4 rounded-2xl bg-gradient-to-r from-rose-500 via-purple-600 to-cyan-500 hover:from-rose-600 hover:to-purple-700 text-white font-extrabold text-sm shadow-xl shadow-rose-500/25 flex items-center justify-center space-x-2 transition-all active:scale-98 disabled:opacity-50"
+            className="w-full py-4 rounded-2xl bg-gradient-to-r from-rose-500 via-purple-600 to-cyan-500 hover:from-rose-600 hover:to-purple-700 text-white font-extrabold text-sm shadow-xl shadow-rose-500/25 transition-all disabled:opacity-50 active:scale-95 flex items-center justify-center space-x-2"
           >
-            <Sparkles className="w-5 h-5" />
-            <span>Generate Faceless Short Video</span>
+            <Sparkles className="w-4 h-4" />
+            <span>Generate Full Video</span>
           </button>
         </div>
       </div>

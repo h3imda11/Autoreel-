@@ -15,6 +15,8 @@ import { AnalyticsView } from './components/AnalyticsView';
 import { SettingsView } from './components/SettingsView';
 import { BillingView } from './components/BillingView';
 import { PublishModal } from './components/PublishModal';
+import { AuthModal } from './components/AuthModal';
+import { AdminSettingsModal } from './components/AdminSettingsModal';
 import { VideoProject, ScheduledPost, SocialAccount, UserProfile, PlatformType, ContentPlanItem } from './types';
 
 export function App() {
@@ -46,6 +48,9 @@ export function App() {
     mode: 'publish',
     video: null,
   });
+
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
 
   // Fetch initial data from backend APIs
   useEffect(() => {
@@ -247,6 +252,21 @@ export function App() {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      fetchInitialData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleAuthSuccess = (authedUser: UserProfile) => {
+    setUser(authedUser);
+    setIsAuthModalOpen(false);
+    fetchInitialData();
+  };
+
   return (
     <div className={`min-h-screen ${isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} flex flex-col font-sans antialiased transition-colors duration-200`}>
       {/* Top Universal Navbar */}
@@ -256,6 +276,9 @@ export function App() {
         onNavigate={handleNavigate}
         isDarkMode={isDarkMode}
         onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onOpenAdminModal={() => setIsAdminModalOpen(true)}
+        onLogout={handleLogout}
       />
 
       <div className="flex-1 flex overflow-hidden">
@@ -383,6 +406,20 @@ export function App() {
           onConfirmSchedule={handleConfirmSchedule}
         />
       )}
+
+      {/* Auth Modal (Sign Up, Sign In, Google Sign-In, Forgot Password) */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onAuthSuccess={handleAuthSuccess}
+      />
+
+      {/* Admin Settings & Free Email Access Manager */}
+      <AdminSettingsModal
+        isOpen={isAdminModalOpen}
+        onClose={() => setIsAdminModalOpen(false)}
+        onRefreshUser={fetchInitialData}
+      />
     </div>
   );
 }
