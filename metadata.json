@@ -1,0 +1,6 @@
+{
+  "name": "AutoReel AI",
+  "description": "AI-powered faceless YouTube Shorts generator, retention optimizer, and automated publishing platform for YouTube creators.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
