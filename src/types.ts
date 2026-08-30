@@ -307,6 +307,9 @@ export interface AnalyticsOverview {
   aiInsights: string[];
 }
 
+export type AccessPlanType = 'lifetime_free' | 'free-vip' | 'starter' | 'creator-pro' | 'viral-agency';
+export type AccessTypeOption = 'lifetime_free' | 'timed_trial' | 'partner_vip';
+
 export interface FreeAccessLimits {
   maxVideosPerMonth: number;
   maxCharsPerPrompt: number;
@@ -322,6 +325,9 @@ export interface FreeAccessEmailEntry {
   addedAt: string;
   note?: string;
   status: 'active' | 'revoked';
+  accessType?: AccessTypeOption;
+  customMaxVideos?: number;
+  customMaxChars?: number;
 }
 
 export interface UserProfile {
@@ -330,13 +336,14 @@ export interface UserProfile {
   email: string;
   avatar: string;
   role: 'admin' | 'user';
-  plan: 'starter' | 'creator-pro' | 'viral-agency' | 'free-vip';
+  plan: AccessPlanType;
   creditsRemaining: number;
   creditsTotal: number;
   videosCreatedThisMonth: number;
   videosLimit: number;
   isFreeAccessUser: boolean;
   isEmailVerified: boolean;
+  accessType?: AccessTypeOption;
   freeTierLimits?: FreeAccessLimits;
   defaultChannelId?: string;
   createdAt?: string;

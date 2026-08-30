@@ -1,0 +1,55 @@
+{
+  "rules": {
+    "users": {
+      "description": "User profiles with their role, plan, and credit allocations",
+      "fields": {
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "avatar": { "type": "string" },
+        "role": { "type": "string" },
+        "plan": { "type": "string" },
+        "isFreeAccessUser": { "type": "boolean" },
+        "isEmailVerified": { "type": "boolean" },
+        "creditsRemaining": { "type": "number" },
+        "creditsTotal": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "allow": {
+        "read": "request.auth != null",
+        "write": "request.auth != null && request.auth.uid == userId"
+      }
+    },
+    "free_access_whitelist": {
+      "description": "Admin controlled list of emails granted 100% lifetime free access",
+      "fields": {
+        "email": { "type": "string" },
+        "status": { "type": "string" },
+        "accessType": { "type": "string" },
+        "addedBy": { "type": "string" },
+        "addedAt": { "type": "string" },
+        "note": { "type": "string" },
+        "maxVideosPerMonth": { "type": "number" },
+        "maxCharsPerPrompt": { "type": "number" }
+      },
+      "allow": {
+        "read": "request.auth != null",
+        "write": "request.auth != null"
+      }
+    },
+    "video_projects": {
+      "description": "Video projects created by users",
+      "fields": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "allow": {
+        "read": "request.auth != null",
+        "write": "request.auth != null"
+      }
+    }
+  }
+}

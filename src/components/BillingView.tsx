@@ -117,13 +117,31 @@ export const BillingView: React.FC<BillingViewProps> = ({ user, onUpgradePlan })
             Current Active Plan
           </div>
           <div className="text-2xl font-black text-white flex items-center space-x-2">
-            <span>Creator Pro</span>
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-rose-500 text-white font-bold">
-              Active
+            <span>
+              {user?.isFreeAccessUser || user?.plan === 'lifetime_free' || user?.plan === 'free-vip'
+                ? 'Lifetime Free VIP'
+                : user?.plan === 'agency'
+                ? 'Agency Scale'
+                : user?.plan === 'pro'
+                ? 'Creator Pro'
+                : 'Starter Creator (Paid)'}
+            </span>
+            <span
+              className={`text-xs px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                user?.isFreeAccessUser || user?.plan === 'lifetime_free' || user?.plan === 'free-vip'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30'
+                  : 'bg-rose-500 text-white'
+              }`}
+            >
+              {user?.isFreeAccessUser || user?.plan === 'lifetime_free' || user?.plan === 'free-vip'
+                ? '100% Free Access Active'
+                : 'Active'}
             </span>
           </div>
           <p className="text-xs text-slate-400">
-            Next renewal on October 15, 2026. Includes unlimited AI hook generation and 1080x1920 exports.
+            {user?.isFreeAccessUser || user?.plan === 'lifetime_free' || user?.plan === 'free-vip'
+              ? 'Your email is verified in the Free Access Whitelist. You have lifetime access with zero billing charges.'
+              : 'Billing cycle renews monthly. Includes unlimited AI hook generation and 1080x1920 exports.'}
           </p>
         </div>
 
@@ -131,17 +149,30 @@ export const BillingView: React.FC<BillingViewProps> = ({ user, onUpgradePlan })
           <div className="flex items-center justify-between text-xs font-semibold">
             <span className="text-slate-400">Video Credits Balance</span>
             <span className="text-rose-400 font-bold font-mono">
-              {user?.creditsRemaining ?? 48} / {user?.creditsTotal ?? 60} Left
+              {user?.isFreeAccessUser || user?.plan === 'lifetime_free' || user?.plan === 'free-vip'
+                ? 'Unlimited VIP'
+                : `${user?.creditsRemaining ?? 48} / ${user?.creditsTotal ?? 60} Left`}
             </span>
           </div>
           <div className="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-slate-800">
             <div
-              className="bg-gradient-to-r from-rose-500 to-purple-500 h-full rounded-full"
-              style={{ width: `${((user?.creditsRemaining ?? 48) / (user?.creditsTotal ?? 60)) * 100}%` }}
+              className={`h-full rounded-full ${
+                user?.isFreeAccessUser || user?.plan === 'lifetime_free' || user?.plan === 'free-vip'
+                  ? 'bg-gradient-to-r from-emerald-400 to-teal-400 w-full'
+                  : 'bg-gradient-to-r from-rose-500 to-purple-500'
+              }`}
+              style={{
+                width:
+                  user?.isFreeAccessUser || user?.plan === 'lifetime_free' || user?.plan === 'free-vip'
+                    ? '100%'
+                    : `${((user?.creditsRemaining ?? 48) / (user?.creditsTotal ?? 60)) * 100}%`,
+              }}
             />
           </div>
           <div className="text-[11px] text-slate-500 text-right">
-            1 credit = 1 complete 9:16 video
+            {user?.isFreeAccessUser || user?.plan === 'lifetime_free' || user?.plan === 'free-vip'
+              ? 'Bypassing all credit restrictions'
+              : '1 credit = 1 complete 9:16 video'}
           </div>
         </div>
       </div>

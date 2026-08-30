@@ -40,6 +40,9 @@ interface FreeAccessEmail {
   addedAt: string;
   note?: string;
   status: 'active' | 'revoked';
+  accessType?: 'lifetime_free' | 'timed_trial' | 'partner_vip';
+  customMaxVideos?: number;
+  customMaxChars?: number;
 }
 
 interface UserAccount {
@@ -49,13 +52,14 @@ interface UserAccount {
   avatar: string;
   passwordHash?: string;
   role: 'admin' | 'user';
-  plan: 'starter' | 'creator-pro' | 'viral-agency' | 'free-vip';
+  plan: 'lifetime_free' | 'free-vip' | 'starter' | 'creator-pro' | 'viral-agency';
   creditsRemaining: number;
   creditsTotal: number;
   videosCreatedThisMonth: number;
   videosLimit: number;
   isFreeAccessUser: boolean;
   isEmailVerified: boolean;
+  accessType?: 'lifetime_free' | 'timed_trial' | 'partner_vip';
   createdAt: string;
   lastLoginAt: string;
   defaultChannelId?: string;
@@ -338,28 +342,56 @@ const DB: DatabaseStore = {
 };
 
 // Helper: Check if an email is in the admin-controlled free access list
-function isEmailInFreeAccessList(email: string): boolean {
-  if (!email) return false;
+function getFreeAccessEntry(email: string): FreeAccessEmail | null {
+  if (!email) return null;
   const clean = email.trim().toLowerCase();
-  if (clean === DB.adminEmail.toLowerCase()) return true;
-  return DB.freeAccessEmails.some(entry => entry.email.toLowerCase() === clean && entry.status === 'active');
+  if (clean === DB.adminEmail.toLowerCase()) {
+    return {
+      id: 'fa-admin',
+      email: clean,
+      addedBy: 'System SuperAdmin',
+      addedAt: new Date().toISOString(),
+      status: 'active',
+      accessType: 'lifetime_free',
+      note: 'Primary SuperAdmin with Lifetime Free Access'
+    };
+  }
+  const entry = DB.freeAccessEmails.find(e => e.email.toLowerCase() === clean && e.status === 'active');
+  return entry || null;
+}
+
+function isEmailInFreeAccessList(email: string): boolean {
+  return !!getFreeAccessEntry(email);
 }
 
 // Helper: Get or resolve active user
 function getCurrentUser(req?: Request): UserAccount {
-  const user = DB.users.find(u => u.id === DB.currentUserSessionId);
-  if (user) {
-    // Dynamic recalculation of free access in case admin updated list
-    if (isEmailInFreeAccessList(user.email)) {
-      user.isFreeAccessUser = true;
-      user.plan = 'free-vip';
-      user.creditsRemaining = 9999;
-      user.creditsTotal = 9999;
-      user.videosLimit = 9999;
-    }
-    return user;
+  let user = DB.users.find(u => u.id === DB.currentUserSessionId);
+  if (!user) {
+    user = DB.users[0];
   }
-  return DB.users[0];
+  
+  // Dynamic recalculation of free access in case admin updated/revoked list
+  const freeEntry = getFreeAccessEntry(user.email);
+  if (freeEntry) {
+    user.isFreeAccessUser = true;
+    user.plan = 'lifetime_free';
+    user.accessType = freeEntry.accessType || 'lifetime_free';
+    user.creditsRemaining = freeEntry.customMaxVideos || 9999;
+    user.creditsTotal = freeEntry.customMaxVideos || 9999;
+    user.videosLimit = freeEntry.customMaxVideos || 9999;
+  } else {
+    // If user's email is removed from the free list, free privileges are revoked immediately
+    if (user.isFreeAccessUser && user.email.toLowerCase() !== DB.adminEmail.toLowerCase()) {
+      user.isFreeAccessUser = false;
+      user.plan = 'starter';
+      user.accessType = undefined;
+      user.creditsRemaining = 10;
+      user.creditsTotal = 10;
+      user.videosLimit = 10;
+    }
+  }
+  return user;
 }
 
 // ==========================================
@@ -369,7 +401,9 @@ function getCurrentUser(req?: Request): UserAccount {
 // Current session
 app.get(['/api/auth/me', '/api/user/profile', '/api/user'], (req: Request, res: Response) => {
   const user = getCurrentUser(req);
-  const isFree = isEmailInFreeAccessList(user.email);
+  const freeEntry = getFreeAccessEntry(user.email);
+  const isFree = !!freeEntry;
+  
   res.json({
     success: true,
     user: {
@@ -378,11 +412,12 @@ app.get(['/api/auth/me', '/api/user/profile', '/api/user'], (req: Request, res: 
       email: user.email,
       avatar: user.avatar,
       role: user.role,
-      plan: isFree ? 'free-vip' : user.plan,
-      creditsRemaining: isFree ? 9999 : user.creditsRemaining,
-      creditsTotal: isFree ? 9999 : user.creditsTotal,
+      plan: isFree ? 'lifetime_free' : user.plan,
+      accessType: isFree ? (freeEntry?.accessType || 'lifetime_free') : undefined,
+      creditsRemaining: isFree ? (freeEntry?.customMaxVideos || 9999) : user.creditsRemaining,
+      creditsTotal: isFree ? (freeEntry?.customMaxVideos || 9999) : user.creditsTotal,
       videosCreatedThisMonth: user.videosCreatedThisMonth,
-      videosLimit: isFree ? 9999 : user.videosLimit,
+      videosLimit: isFree ? (freeEntry?.customMaxVideos || 9999) : user.videosLimit,
       isFreeAccessUser: isFree,
       isEmailVerified: user.isEmailVerified,
       freeTierLimits: isFree ? DB.freeTierLimits : undefined,
@@ -405,7 +440,8 @@ app.post('/api/auth/signup', (req: Request, res: Response) => {
     return res.json({ success: true, message: 'Welcome back!', user: existing });
   }
 
-  const isFree = isEmailInFreeAccessList(cleanEmail);
+  const freeEntry = getFreeAccessEntry(cleanEmail);
+  const isFree = !!freeEntry;
   const isAdm = cleanEmail === DB.adminEmail.toLowerCase();
 
   const newUser: UserAccount = {
@@ -415,11 +451,12 @@ app.post('/api/auth/signup', (req: Request, res: Response) => {
     avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`,
     passwordHash: 'secured-hash',
     role: isAdm ? 'admin' : 'user',
-    plan: isFree ? 'free-vip' : 'starter',
-    creditsRemaining: isFree ? 9999 : 10,
-    creditsTotal: isFree ? 9999 : 10,
+    plan: isFree ? 'lifetime_free' : 'starter',
+    accessType: isFree ? (freeEntry?.accessType || 'lifetime_free') : undefined,
+    creditsRemaining: isFree ? (freeEntry?.customMaxVideos || 9999) : 10,
+    creditsTotal: isFree ? (freeEntry?.customMaxVideos || 9999) : 10,
     videosCreatedThisMonth: 0,
-    videosLimit: isFree ? 9999 : 10,
+    videosLimit: isFree ? (freeEntry?.customMaxVideos || 9999) : 10,
     isFreeAccessUser: isFree,
     isEmailVerified: true,
     createdAt: new Date().toISOString(),
@@ -432,8 +469,8 @@ app.post('/api/auth/signup', (req: Request, res: Response) => {
   res.json({
     success: true,
     message: isFree
-      ? 'Account created with 100% Free VIP Access unlocked by administrator!'
-      : 'Account created successfully with 10 free trial credits!',
+      ? 'Account created with 100% Lifetime Free Access authorized by administrator!'
+      : 'Account created successfully with 10 free trial credits! Payment required for upgrade.',
     user: newUser
   });
 });
@@ -447,41 +484,52 @@ app.post('/api/auth/signin', (req: Request, res: Response) => {
 
   const cleanEmail = email.trim().toLowerCase();
   let user = DB.users.find(u => u.email.toLowerCase() === cleanEmail);
+  const freeEntry = getFreeAccessEntry(cleanEmail);
+  const isFree = !!freeEntry;
+  const isAdm = cleanEmail === DB.adminEmail.toLowerCase();
 
   if (!user) {
-    const isFree = isEmailInFreeAccessList(cleanEmail);
-    const isAdm = cleanEmail === DB.adminEmail.toLowerCase();
     user = {
       id: `usr-${Date.now()}`,
       name: cleanEmail.split('@')[0],
       email: cleanEmail,
       avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanEmail)}`,
       role: isAdm ? 'admin' : 'user',
-      plan: isFree ? 'free-vip' : 'starter',
-      creditsRemaining: isFree ? 9999 : 10,
-      creditsTotal: isFree ? 9999 : 10,
+      plan: isFree ? 'lifetime_free' : 'starter',
+      accessType: isFree ? (freeEntry?.accessType || 'lifetime_free') : undefined,
+      creditsRemaining: isFree ? (freeEntry?.customMaxVideos || 9999) : 10,
+      creditsTotal: isFree ? (freeEntry?.customMaxVideos || 9999) : 10,
       videosCreatedThisMonth: 0,
-      videosLimit: isFree ? 9999 : 10,
+      videosLimit: isFree ? (freeEntry?.customMaxVideos || 9999) : 10,
       isFreeAccessUser: isFree,
       isEmailVerified: true,
       createdAt: new Date().toISOString(),
       lastLoginAt: new Date().toISOString(),
     };
     DB.users.push(user);
+  } else {
+    // Sync status with current whitelist
+    user.isFreeAccessUser = isFree;
+    user.plan = isFree ? 'lifetime_free' : (user.plan === 'lifetime_free' ? 'starter' : user.plan);
+    user.accessType = isFree ? (freeEntry?.accessType || 'lifetime_free') : undefined;
+    if (isFree) {
+      user.creditsRemaining = freeEntry?.customMaxVideos || 9999;
+      user.creditsTotal = freeEntry?.customMaxVideos || 9999;
+      user.videosLimit = freeEntry?.customMaxVideos || 9999;
+    }
   }
 
   user.lastLoginAt = new Date().toISOString();
   DB.currentUserSessionId = user.id;
 
-  const isFree = isEmailInFreeAccessList(user.email);
   res.json({
     success: true,
-    message: isFree ? 'Logged in with 100% Free Admin-Authorized VIP Access' : 'Signed in successfully',
+    message: isFree ? 'Logged in with 100% Lifetime Free Admin-Authorized VIP Access' : 'Signed in successfully',
     user: {
       ...user,
       isFreeAccessUser: isFree,
-      plan: isFree ? 'free-vip' : user.plan,
-      creditsRemaining: isFree ? 9999 : user.creditsRemaining,
+      plan: isFree ? 'lifetime_free' : user.plan,
+      creditsRemaining: isFree ? (freeEntry?.customMaxVideos || 9999) : user.creditsRemaining,
     }
   });
 });
@@ -492,7 +540,8 @@ app.post('/api/auth/google', (req: Request, res: Response) => {
   const userEmail = (email || PRIMARY_ADMIN_EMAIL).trim().toLowerCase();
   let user = DB.users.find(u => u.email.toLowerCase() === userEmail);
 
-  const isFree = isEmailInFreeAccessList(userEmail);
+  const freeEntry = getFreeAccessEntry(userEmail);
+  const isFree = !!freeEntry;
   const isAdm = userEmail === DB.adminEmail.toLowerCase();
 
   if (!user) {
@@ -502,17 +551,27 @@ app.post('/api/auth/google', (req: Request, res: Response) => {
       email: userEmail,
       avatar: avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
       role: isAdm ? 'admin' : 'user',
-      plan: isFree ? 'free-vip' : 'starter',
-      creditsRemaining: isFree ? 9999 : 15,
-      creditsTotal: isFree ? 9999 : 15,
+      plan: isFree ? 'lifetime_free' : 'starter',
+      accessType: isFree ? (freeEntry?.accessType || 'lifetime_free') : undefined,
+      creditsRemaining: isFree ? (freeEntry?.customMaxVideos || 9999) : 15,
+      creditsTotal: isFree ? (freeEntry?.customMaxVideos || 9999) : 15,
       videosCreatedThisMonth: 0,
-      videosLimit: isFree ? 9999 : 15,
+      videosLimit: isFree ? (freeEntry?.customMaxVideos || 9999) : 15,
       isFreeAccessUser: isFree,
       isEmailVerified: true,
       createdAt: new Date().toISOString(),
       lastLoginAt: new Date().toISOString(),
     };
     DB.users.push(user);
+  } else {
+    user.isFreeAccessUser = isFree;
+    user.plan = isFree ? 'lifetime_free' : (user.plan === 'lifetime_free' ? 'starter' : user.plan);
+    user.accessType = isFree ? (freeEntry?.accessType || 'lifetime_free') : undefined;
+    if (isFree) {
+      user.creditsRemaining = freeEntry?.customMaxVideos || 9999;
+      user.creditsTotal = freeEntry?.customMaxVideos || 9999;
+      user.videosLimit = freeEntry?.customMaxVideos || 9999;
+    }
   }
 
   user.lastLoginAt = new Date().toISOString();
@@ -520,11 +579,11 @@ app.post('/api/auth/google', (req: Request, res: Response) => {
 
   res.json({
     success: true,
-    message: isFree ? 'Google Authentication Verified - 100% Free VIP Access Active' : 'Signed in with Google',
+    message: isFree ? 'Google Authentication Verified - 100% Lifetime Free Access Active' : 'Signed in with Google',
     user: {
       ...user,
       isFreeAccessUser: isFree,
-      plan: isFree ? 'free-vip' : user.plan,
+      plan: isFree ? 'lifetime_free' : user.plan,
     }
   });
 });
@@ -568,7 +627,7 @@ app.get('/api/admin/free-emails', requireAdmin, (req: Request, res: Response) =>
 
 // Admin: Add email to free access list
 app.post('/api/admin/free-emails', requireAdmin, (req: Request, res: Response) => {
-  const { email, note } = req.body;
+  const { email, note, accessType = 'lifetime_free', customMaxVideos = 9999, customMaxChars = 5000 } = req.body;
   if (!email || !email.includes('@')) {
     return res.status(400).json({ success: false, error: 'Valid email is required' });
   }
@@ -578,6 +637,9 @@ app.post('/api/admin/free-emails', requireAdmin, (req: Request, res: Response) =
 
   if (existing) {
     existing.status = 'active';
+    existing.accessType = accessType;
+    existing.customMaxVideos = customMaxVideos;
+    existing.customMaxChars = customMaxChars;
     if (note) existing.note = note;
   } else {
     DB.freeAccessEmails.push({
@@ -587,6 +649,9 @@ app.post('/api/admin/free-emails', requireAdmin, (req: Request, res: Response) =
       addedAt: new Date().toISOString(),
       note: note || 'Manually added by Admin',
       status: 'active',
+      accessType: accessType,
+      customMaxVideos: customMaxVideos,
+      customMaxChars: customMaxChars,
     });
   }
 
@@ -594,24 +659,25 @@ app.post('/api/admin/free-emails', requireAdmin, (req: Request, res: Response) =
   const matchedUser = DB.users.find(u => u.email.toLowerCase() === cleanEmail);
   if (matchedUser) {
     matchedUser.isFreeAccessUser = true;
-    matchedUser.plan = 'free-vip';
-    matchedUser.creditsRemaining = 9999;
-    matchedUser.creditsTotal = 9999;
-    matchedUser.videosLimit = 9999;
+    matchedUser.plan = 'lifetime_free';
+    matchedUser.accessType = accessType;
+    matchedUser.creditsRemaining = customMaxVideos;
+    matchedUser.creditsTotal = customMaxVideos;
+    matchedUser.videosLimit = customMaxVideos;
   }
 
   res.json({
     success: true,
-    message: `Added ${cleanEmail} to Free Access Email List. They now have 100% free access to all features.`,
+    message: `Added ${cleanEmail} with 100% Lifetime Free Access. Full VIP privileges active immediately.`,
     emails: DB.freeAccessEmails,
   });
 });
 
 // Admin: Remove email from free access list
 app.delete('/api/admin/free-emails/:id', requireAdmin, (req: Request, res: Response) => {
-  const entry = DB.freeAccessEmails.find(e => e.id === req.params.id || e.email === req.params.id);
+  const entry = DB.freeAccessEmails.find(e => e.id === req.params.id || e.email.toLowerCase() === req.params.id.toLowerCase());
   if (!entry) {
-    return res.status(404).json({ success: false, error: 'Email entry not found' });
+    return res.status(404).json({ success: false, error: 'Email entry not found in Free Access list' });
   }
 
   if (entry.email.toLowerCase() === DB.adminEmail.toLowerCase()) {
@@ -626,32 +692,41 @@ app.delete('/api/admin/free-emails/:id', requireAdmin, (req: Request, res: Respo
   if (matchedUser) {
     matchedUser.isFreeAccessUser = false;
     matchedUser.plan = 'starter';
+    matchedUser.accessType = undefined;
     matchedUser.creditsRemaining = 10;
+    matchedUser.creditsTotal = 10;
+    matchedUser.videosLimit = 10;
   }
 
   res.json({
     success: true,
-    message: `Removed ${entry.email} from Free Access list.`,
+    message: `Removed ${entry.email} from Free Access list. Free privileges revoked immediately.`,
     emails: DB.freeAccessEmails,
   });
 });
 
 // Admin: View all registered users
 app.get('/api/admin/users', requireAdmin, (req: Request, res: Response) => {
-  const usersWithAccessStatus = DB.users.map(u => ({
-    id: u.id,
-    name: u.name,
-    email: u.email,
-    avatar: u.avatar,
-    role: u.role,
-    plan: isEmailInFreeAccessList(u.email) ? 'free-vip' : u.plan,
-    creditsRemaining: isEmailInFreeAccessList(u.email) ? 9999 : u.creditsRemaining,
-    creditsTotal: isEmailInFreeAccessList(u.email) ? 9999 : u.creditsTotal,
-    videosCreatedThisMonth: u.videosCreatedThisMonth,
-    isFreeAccessUser: isEmailInFreeAccessList(u.email),
-    createdAt: u.createdAt,
-    lastLoginAt: u.lastLoginAt,
-  }));
+  const usersWithAccessStatus = DB.users.map(u => {
+    const freeEntry = getFreeAccessEntry(u.email);
+    const isFree = !!freeEntry;
+    return {
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      avatar: u.avatar,
+      role: u.role,
+      plan: isFree ? 'lifetime_free' : u.plan,
+      accessType: isFree ? (freeEntry?.accessType || 'lifetime_free') : undefined,
+      creditsRemaining: isFree ? (freeEntry?.customMaxVideos || 9999) : u.creditsRemaining,
+      creditsTotal: isFree ? (freeEntry?.customMaxVideos || 9999) : u.creditsTotal,
+      videosCreatedThisMonth: u.videosCreatedThisMonth,
+      isFreeAccessUser: isFree,
+      isEmailVerified: u.isEmailVerified,
+      createdAt: u.createdAt,
+      lastLoginAt: u.lastLoginAt,
+    };
+  });
 
   res.json({
     success: true,

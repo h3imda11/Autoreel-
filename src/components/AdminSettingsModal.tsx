@@ -43,6 +43,8 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
 
   const [newEmail, setNewEmail] = useState('');
   const [newNote, setNewNote] = useState('');
+  const [newAccessType, setNewAccessType] = useState<'lifetime_free' | 'timed_trial' | 'partner_vip'>('lifetime_free');
+  const [newCustomVideos, setNewCustomVideos] = useState<number>(9999);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -104,7 +106,9 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: newEmail.trim().toLowerCase(),
-          note: newNote.trim() || 'Added via Admin Settings'
+          note: newNote.trim() || 'Added via Admin Settings',
+          accessType: newAccessType,
+          customMaxVideos: newCustomVideos,
         }),
       });
       const data = await res.json();
@@ -301,34 +305,65 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
                   Users with these verified email addresses bypass all credit restrictions, receiving 9,999 videos/month, custom voices, full HD rendering, and automated YouTube publishing.
                 </p>
 
-                <form onSubmit={handleAddEmail} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="sm:col-span-1">
-                    <input
-                      type="email"
-                      required
-                      placeholder="user@example.com"
-                      value={newEmail}
-                      onChange={(e) => setNewEmail(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-rose-500"
-                    />
+                <form onSubmit={handleAddEmail} className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-300 block mb-1">Email Address</label>
+                      <input
+                        type="email"
+                        required
+                        placeholder="creator@example.com"
+                        value={newEmail}
+                        onChange={(e) => setNewEmail(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-rose-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-300 block mb-1">Access Type</label>
+                      <select
+                        value={newAccessType}
+                        onChange={(e: any) => setNewAccessType(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-rose-500"
+                      >
+                        <option value="lifetime_free">Lifetime Free Access</option>
+                        <option value="partner_vip">Partner VIP Unlimited</option>
+                        <option value="timed_trial">Extended Free Creator</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-300 block mb-1">Monthly Video Limit</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="99999"
+                        value={newCustomVideos}
+                        onChange={(e) => setNewCustomVideos(Number(e.target.value))}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-rose-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-300 block mb-1">Creator Note</label>
+                      <input
+                        type="text"
+                        placeholder="VIP Creator / Early Beta"
+                        value={newNote}
+                        onChange={(e) => setNewNote(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-rose-500"
+                      />
+                    </div>
                   </div>
-                  <div className="sm:col-span-1">
-                    <input
-                      type="text"
-                      placeholder="Optional Note (e.g. VIP Creator)"
-                      value={newNote}
-                      onChange={(e) => setNewNote(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-rose-500"
-                    />
-                  </div>
-                  <div className="sm:col-span-1">
+
+                  <div className="flex justify-end pt-1">
                     <button
                       type="submit"
                       disabled={loading}
-                      className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-rose-500 to-purple-600 hover:from-rose-600 hover:to-purple-700 text-white font-bold text-xs shadow-md transition-all active:scale-95 flex items-center justify-center space-x-2"
+                      className="py-2.5 px-5 rounded-xl bg-gradient-to-r from-rose-500 to-purple-600 hover:from-rose-600 hover:to-purple-700 text-white font-bold text-xs shadow-md transition-all active:scale-95 flex items-center justify-center space-x-2"
                     >
                       <UserPlus className="w-4 h-4" />
-                      <span>Grant Free Access</span>
+                      <span>Grant Free Access (FREE ACCESS GRANTED)</span>
                     </button>
                   </div>
                 </form>
@@ -343,12 +378,12 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search authorized emails..."
+                      placeholder="Search free users or notes..."
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-rose-500"
                     />
                   </div>
                   <span className="text-xs text-slate-500">
-                    Showing {filteredEmails.length} authorized addresses
+                    Showing {filteredEmails.length} active free records
                   </span>
                 </div>
 
@@ -357,8 +392,9 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
                     <thead className="bg-slate-950/80 text-slate-400 font-semibold border-b border-slate-800">
                       <tr>
                         <th className="p-3.5">Email Address</th>
+                        <th className="p-3.5">Access Type</th>
+                        <th className="p-3.5">Limits</th>
                         <th className="p-3.5">Notes</th>
-                        <th className="p-3.5">Added By</th>
                         <th className="p-3.5">Status</th>
                         <th className="p-3.5 text-right">Actions</th>
                       </tr>
@@ -370,22 +406,29 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
                             <span className="w-2 h-2 rounded-full bg-emerald-400" />
                             <span>{item.email}</span>
                           </td>
-                          <td className="p-3.5 text-slate-400">{item.note || '—'}</td>
-                          <td className="p-3.5 text-slate-500">{item.addedBy}</td>
                           <td className="p-3.5">
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-semibold text-[10px]">
-                              100% Free VIP
+                            <span className="px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-300 font-bold text-[10px] uppercase">
+                              {item.accessType === 'lifetime_free' || !item.accessType ? 'Lifetime Free' : item.accessType.replace('_', ' ')}
+                            </span>
+                          </td>
+                          <td className="p-3.5 font-mono text-emerald-400 font-semibold">
+                            {item.customMaxVideos || 9999} videos/mo
+                          </td>
+                          <td className="p-3.5 text-slate-400">{item.note || '—'}</td>
+                          <td className="p-3.5">
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold text-[10px] uppercase tracking-wide">
+                              FREE ACCESS GRANTED
                             </span>
                           </td>
                           <td className="p-3.5 text-right">
                             {item.email.toLowerCase() === 'sachinmurali90@gmail.com' ? (
-                              <span className="text-[10px] text-slate-500 italic">Primary Admin</span>
+                              <span className="text-[10px] text-slate-500 italic">Primary SuperAdmin</span>
                             ) : (
                               <button
                                 type="button"
                                 onClick={() => handleRemoveEmail(item.id, item.email)}
                                 className="p-1.5 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-950/40 transition-colors"
-                                title="Revoke Free Access"
+                                title="Revoke Free Access (Revert to PAYMENT REQUIRED)"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -395,8 +438,8 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
                       ))}
                       {filteredEmails.length === 0 && (
                         <tr>
-                          <td colSpan={5} className="p-6 text-center text-slate-500">
-                            No authorized emails found matching your query.
+                          <td colSpan={6} className="p-6 text-center text-slate-500">
+                            No free user emails found matching your query.
                           </td>
                         </tr>
                       )}
@@ -416,9 +459,9 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
                     <tr>
                       <th className="p-3.5">Creator</th>
                       <th className="p-3.5">Role</th>
-                      <th className="p-3.5">Plan / VIP Status</th>
-                      <th className="p-3.5">Credits Remaining</th>
-                      <th className="p-3.5">Videos Created</th>
+                      <th className="p-3.5">Access Status</th>
+                      <th className="p-3.5">Plan</th>
+                      <th className="p-3.5">Credits / Usage</th>
                       <th className="p-3.5">Joined</th>
                     </tr>
                   </thead>
@@ -451,19 +494,29 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
                         </td>
                         <td className="p-3.5">
                           {usr.isFreeAccessUser ? (
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-semibold text-[10px]">
-                              VIP Free Access (Unlimited)
+                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-extrabold text-[10px] uppercase tracking-wide">
+                              FREE ACCESS
                             </span>
                           ) : (
-                            <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 text-[10px]">
-                              {usr.plan}
+                            <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold text-[10px] uppercase tracking-wide">
+                              PAID USER
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3.5">
+                          {usr.isFreeAccessUser ? (
+                            <span className="text-emerald-400 font-semibold text-xs">
+                              Lifetime Free
+                            </span>
+                          ) : (
+                            <span className="text-slate-300 font-medium text-xs">
+                              {usr.plan || 'Starter (Trial)'}
                             </span>
                           )}
                         </td>
                         <td className="p-3.5 font-mono font-bold text-rose-400">
-                          {usr.isFreeAccessUser ? '∞ Unlimited' : `${usr.creditsRemaining} / ${usr.creditsTotal}`}
+                          {usr.isFreeAccessUser ? '∞ Unlimited (VIP)' : `${usr.creditsRemaining} / ${usr.creditsTotal}`}
                         </td>
-                        <td className="p-3.5 font-mono">{usr.videosCreatedThisMonth || 0}</td>
                         <td className="p-3.5 text-slate-500">
                           {new Date(usr.createdAt).toLocaleDateString()}
                         </td>
